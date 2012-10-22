@@ -1,5 +1,8 @@
 <?php
 namespace Wusa;
+use Zend\Log;
+use Zend\Log\Writer;
+use Zend;
 /**
  * Holds the Config
  * @author Lukas Plattner
@@ -36,18 +39,14 @@ class Config
 
     /**
      * Constructor of Config
+     * autoloads the global config
      */
     protected function __construct()
     {
         $this->configdata = new \Zend\Config\Config(array());
         $this->loadConfigFile('global.ini');
-
-        foreach($this->configdata as $key => $val)
-        {
-            echo "$key -> ".var_export($val,true)."<br>\n";
-        }
+        Db::addConfdir($this->configdata->system->db->configdir->toArray());
     }
-
     /**
      * Loads a Configfile into internal Data
      * @param $file
@@ -57,14 +56,18 @@ class Config
     {
         $filepath = CONFIG_PATH.$file;
         try{
-            if(array_key_exists($file,$this->configdata)) return false;
-            if(!file_exists($filepath)) return false;
+            if(!file_exists($filepath))
+            {
+                $this->getLogger()->err(__METHOD__.': Could not Load '.var_export($file,true).' (file not found)');
+                return false;
+            }
             $reader = new \Zend\Config\Reader\Ini($filepath);
             $this->configdata->merge(new \Zend\Config\Config($reader->fromFile($filepath)));
             return true;
         }
         catch(Exception $e)
         {
+            $this->doLog(__METHOD__.': Could not Load '.var_export($file,true).' (Exception '.$e->getMessage().')',\Zend\Log\Logger::ERR);
             return false;
         }
     }
@@ -76,15 +79,12 @@ class Config
      */
     public function __get($param)
     {
-        foreach($this->configdata as $config)
-        {
-            if($config->$param)
-            {
-                return $config->$param;
-            }
-        }
-        return false;
+        return $this->get($param);
     }
+    public function get($param,$default=null)
+    {
+        return $this->configdata->get($param,$default);
+        }
 
     /**
      * Returns the Systemlogger
@@ -111,8 +111,8 @@ class Config
      * @param $message
      * @param $prio
      */
-    public static function doLog($message,$prio)
+    public static function doLog($message,$prio = \Zend\Log\Logger::ERR)
     {
-        self::getInstance()->getLogger()->log($message,$prio);
+        self::getInstance()->getLogger()->log($prio,$message);
     }
 }

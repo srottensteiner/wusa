@@ -1,39 +1,38 @@
 <?php
 $config = array();
-$config['db']['adapterNamespace'] = "Tomato_Db";
-$config['db']['adapter'] = "mysqli";
-$config['db']['prefix'] = "";
+$config['driver'] = "Mysqli";
+$config['prefix'] = "";
 
-$config['db']['global']['dbname'] = 'wusa';
-$config['db']['global']['username'] = 'wusa';
-$config['db']['global']['password'] = '';
-$config['db']['global']['charset'] = 'utf8';
+$config['global']['dbname'] = 'wusa';
+$config['global']['username'] = 'wusa';
+$config['global']['password'] = '';
+$config['global']['characterset'] = 'utf8';
 
 /**
  * Master DB Virtuelle IP-Adresse
  */
-$config['db']['master']['default'] = "master0";
+$config['master']['default'] = "master0";
 
 /**
  * Slave DBs
  * vorerst nur localhost, 10.232.190.41 und 10.232.190.51
  */
-$config['db']['slave']['default'] = 'slave1';
+$config['slave']['default'] = 'slave1';
 
 
-$config['db']['master']['master0']['host'] = "127.0.0.1";
-$config['db']['master']['master0']['port'] = "3306";
-$config['db']['master']['master0']['dbname'] = $config['db']['global']['dbname'];
-$config['db']['master']['master0']['username'] = $config['db']['global']['username'];
-$config['db']['master']['master0']['password'] = $config['db']['global']['password'];
-$config['db']['master']['master0']['charset'] = $config['db']['global']['charset'];
+$config['master']['master0']['host'] = "127.0.0.1";
+$config['master']['master0']['port'] = "3306";
+$config['master']['master0']['dbname'] = $config['global']['dbname'];
+$config['master']['master0']['username'] = $config['global']['username'];
+$config['master']['master0']['password'] = $config['global']['password'];
+$config['master']['master0']['characterset'] = $config['global']['characterset'];
 
 
-$config['db']['slave']['slave1']['host'] = "127.0.0.1";
-$config['db']['slave']['slave1']['port'] = "3306";
-$config['db']['slave']['slave1']['dbname'] = $config['db']['global']['dbname'];
-$config['db']['slave']['slave1']['username'] = $config['db']['global']['username'];
-$config['db']['slave']['slave1']['password'] = $config['db']['global']['password'];
-$config['db']['slave']['slave1']['charset'] = $config['db']['global']['charset'];
+$config['slave']['slave1']['host'] = "127.0.0.1";
+$config['slave']['slave1']['port'] = "3306";
+$config['slave']['slave1']['dbname'] = $config['global']['dbname'];
+$config['slave']['slave1']['username'] = $config['global']['username'];
+$config['slave']['slave1']['password'] = $config['global']['password'];
+$config['slave']['slave1']['characterset'] = $config['global']['characterset'];
 
 return $config;
