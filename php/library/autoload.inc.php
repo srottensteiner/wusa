@@ -10,7 +10,7 @@ include LIBRARY_PATH . 'Zend/Loader/AutoloaderFactory.php';
 $autoloader = Zend\Loader\AutoloaderFactory::factory(array(
     'Zend\Loader\StandardAutoloader' => array(
         'namespaces' => array(
-            'Wusa_' => LIBRARY_PATH . 'Wusa',
+            'Wusa' => LIBRARY_PATH . 'Wusa',
         ),
         'autoregister_zf' => true
     ),
