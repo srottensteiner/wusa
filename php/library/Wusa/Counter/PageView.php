@@ -1,13 +1,15 @@
 <?php
+namespace Wusa\Counter;
+use Wusa;
 /**
  * Counting a Pageview
  * @author lukas.plattner
  *
  */
-class Wusa_Counter_PageView extends Wusa_Counter
+class PageView extends Counter
 {
     /**
-     * @see Tk_App_Counter::data
+     * @see Wusa\Counter::data
      * @var array
      */
     protected $data = array(
@@ -21,7 +23,7 @@ class Wusa_Counter_PageView extends Wusa_Counter
                 'visitsession' => '',
                 );
     /**
-     * @see Tk_App_Counter::mapping
+     * @see Wusa\Counter::mapping
      * @var array
      */
     protected $mapping = array(
@@ -34,6 +36,7 @@ class Wusa_Counter_PageView extends Wusa_Counter
     protected $table = 'cp_pageview';
     public function __construct()
     {
+        $this->table= Config::getInstance()->counter->db->prefix.'pageview';
         $this->data['uc'] = $this->getUniqeClient();
         $this->data['pageId'] = $this->getPageId();
         $this->data['szeitpunkt'] = date('Y-m-d H:i:s');

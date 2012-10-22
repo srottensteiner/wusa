@@ -1,52 +1,52 @@
 <?php
+namespace Wusa;
 /**
- * Zählpixel
+ * Counter
  * @author lukas.plattner
  */
-abstract class Wusa_Counter{
+abstract class Counter{
     
     /**
-     * Daten die gespeichert werden sollen in der Tabelle
-     * @var unknown_type
+     * Defining which data will be saved in Table
+     * @var array
      */
     protected $data = array();
     /**
-     * Tabelle in der die Daten des Pixels gespeichert werden sollen
-     * @var unknown_type
+     * Table where the data should be stored
+     * @var string
      */
     protected $table = '';
     /**
-     * Mapping der Post- oder Gettariablen auf die Datenbankfelder 
-     * @var unknown_type
+     * Mapping from post- and getvars to tablefields
+     * @var array
      */
     protected $mapping = array();
     
     /**
-     * Gibt die Datenbankverbindung retour
-     * @return Zend_Db_Adapter_Abstract
+     * Returns Databaseconnection
+     * @return \Zend\Db\Adapter\Abstract
      */
     protected function getDb()
     {
         return Tomato_Db::factory('master','cp');
     }
     /**
-     * Statische Methode, die die Korrekte Klasse instanziert um den Aufruf zu ZÃ¤hlen
+     * Static Method to instance the correct class for counting
      */
     public static function count()
     {
         try{
             $function = ucfirst(trim($_REQUEST['cmd']));
-            $class = 'Tk_App_Counter_'.$function;
+            $class = __NAMESPACE__.'\\'.__CLASS__.'\\'.$function;
             if(class_exists($class))
             {
                 $cl = new $class();
                 $cl->doCount();
             }
-            
         }
         catch(Exception $e) //Wenn was Schief geht abfangen
         {
-            error_log('CP: '.$e->getMessage());
+            Config::doLog('CP: '.$e->getMessage(),\Zend\Log\Logger::ERR);
         }
         
     }
