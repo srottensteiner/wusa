@@ -1,3 +1,2 @@
 .idea/*
-logs/log.log
-logs/*
+php/logs/*.log
