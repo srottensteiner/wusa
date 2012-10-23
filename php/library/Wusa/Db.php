@@ -4,13 +4,31 @@ use Zend\Db\Adapter;
 
 class Db
 {
-	const RETURN_ONLY    = 1;
-	const SET_AND_RETURN = 2;
+    /**
+     * Possible ways of handling new connections
+     */
+    const RETURN_ONLY    = 1;
+	const RETURN_AND_SET = 2;
+    /**
+     * Connectionstypes
+     */
+    const CONNECTION_TYPE_SLAVE = 'slave';
+    const CONNECTION_TYPE_MASTER = 'master';
     /**
      * Ordner in denen nach der Config gesucht werden soll
      * @var array
      */
-    private static $_confDirs = array();
+    protected static $_confDirs = array();
+    /**
+     * Saves the opened Connections
+     * @var array
+     */
+    protected static $_connections = array();
+    /**
+     * Holds the ID of the active connection
+     * @var null|string
+     */
+    protected static $_activeConnection = null;
 	/**
 	 * Gets the database connection
 	 * 
@@ -18,36 +36,24 @@ class Db
 	 * @param string $config If not passed the default from Config will be used
 	 * @return \Zend\Db\Adapter\Adapter
 	 */
-	public static function factory($type = 'slave', $config = null, $act = self::SET_AND_RETURN)
+	public static function factory($type = self::CONNECTION_TYPE_SLAVE, $config = null, $act = self::RETURN_AND_SET)
 	{
         if(!$config)
         {
             $config = Config::getInstance()->system->db->connection->default;
         }
+        $key = $type.'_'.$config;
 
         $config = self::getDbConfig($config);
-        return Db\Connect::connect($config,$type,'');
-
-        /**
-		$appName = $appName ? $appName : TOMATO_APP_NAME;
-		$key	 = self::CONNECTION_KEY . '_' . $type . '_' . $appName;
-		if (!Zend_Registry::isRegistered($key)) {
-			$config  = self::getDbConfig($appName);
-			
-			$db = self::_connectNode($config, $type, $appName);
-			
-			Zend_Registry::set($key, $db);
-			self::$_dbConnectionKeys[] = $key;
-		}
-		
-		$db = Zend_Registry::get($key);
-		
-		if ($act == self::SET_AND_RETURN) {
-			Zend_Registry::set('db', $db);
-		}
-		
-		return $db;
-         */
+        if(!array_key_exists($key,self::$_connections))
+        {
+            self::$_connections[$key] = Db\Connect::connect($config,$type,'');
+        }
+        if($act === self::RETURN_AND_SET)
+        {
+            self::$_activeConnection = $key;
+        }
+        return self::$_connections[$key];
 	}
 
     /**
@@ -100,252 +106,6 @@ class Db
     {
         self::$_confDirs = array();
     }
-	
-	protected static function _connectNode($config,$type,$appName)
-	{
-	    $connectionType = isset($config['db'][$type]['conectiontype'])?$config['db'][$type]['conectiontype']:'defaultRandom';
-	    
-	    if(isset($config['db'][$type]['conectiontype'])) unset($config['db'][$type]['conectiontype']);
-	    
-	    $func = '_connect'.ucfirst($connectionType);
-	    
-	    if(!method_exists(__CLASS__, $func))
-	    {
-	        throw new Exception('Unknown Connection Type: '.$connectionType);
-	    }
-	    
-	    return call_user_func_array(array(__CLASS__,$func), array($config,$type,$appName));
-	}
-	
-	protected static function _connectCluster($config,$type,$appName)
-	{
-	    $servers = $config['db'][$type];
-	    if(isset($servers['default'])) unset($servers['default']);
-	    
-	    $node = array_rand($servers); //Generieren einer Zufallszahl anhan derer ein Verbindungsversuch gemacht wird
-	    
-	    $cachekey = 'cluster_status_' . str_replace('.', '_', $appName); //generieren eines Uniqe Keys je Cluster
-	    
-	    $success = false;
-	    $ndb_status = apc_fetch($cachekey, $success);
-	    
-	    if( $success === false) // Key konnte nicht aus dem Cache geholt werden
-	    {
-	        //Initiales Setzen des ndb_status arrays
-	        $ndb_status = array();
-	        foreach ($servers as $key => $val)
-	        {
-	            $ndb_status[$key] = array("try"=>0,"set"=>time());
-	        }
-	        apc_store($cachekey, $ndb_status);
-	    }
-	    
-	   $db= self::_connectClusterNode($config,$type,$ndb_status,0,$node,$cachekey);
-	    
-	    if($db === null)
-	    {
-	        throw new Exception("Connection Error auf mysql_cluster | ".mysql_error());
-	    }
-	    return $db;
-	}
-	
-	/**
-	 * Stellt die Verbindung zu einer Node her
-	 * Bricht nach der Maximalen anzahl der Versuche ab
-	 * Wenn eine Node nicht reagiert, wird bei der n�chsten Node versucht zu verbinden
-	 *
-	 * @return Zend_Db_Adapter_Abstract
-	 */
-	private static function _connectClusterNode(array $config,$type,array $ndb_status, $try,$node,$cachekey)
-	{
-	    if($try>=self::CLUSTERMAXTRY) //Maximale Anzahl der Verbindungsversuche erreicht
-	    {
-	        return false;
-	    }
-	    //echo "Node: $node<br>\n";
-	    
-	    $servers = $config['db'][$type];
-	    if(isset($servers['default'])) unset($servers['default']);
-	    
-	    if(	$ndb_status[$node]["try"] >= self::CLUSTERMAXTRYNODE  &&
-	            $ndb_status[$node]["set"]>(time() - self::CLUSTERINFOTIMEOUT)
-	    )
-	    {
-	        do{
-	            $nextNode = array_rand($servers);
-	        }while($nextNode == $node);
-	        // Mit dieser Node kann nicht verbunden werden weil sie vermutlich nicht reagiert
-	        return self::_connectClusterNode($config,$type, $ndb_status, ++$try, $nextNode,$cachekey);
-	    }
-	    $starttime = microtime();
-	    
-	    try{
-    	    $db = self::_connect($config, $type, $node);
-    	    
-    	    if($db !== null)
-    	    {
-    	        if(!$db->getConnection())
-    	        {
-    	            $db = null;
-    	        }
-    	    
-    	    }
-	    }
-	    catch(Exception $e)
-	    {
-	        $db = null;
-	    }
-	    
-	    if($db === null)
-	    {
-	        //echo "verbindung nicht m�glich <br>\n";
-	        $ndb_status[$node]["try"]++;
-	        $ndb_status[$node]["set"] = time();
-	        apc_store($cachekey, $ndb_status);
-	        do{
-	            $nextNode = array_rand($servers);
-	        }while($nextNode == $node);
-	        // Mit dieser Node kann nicht verbunden werden weil sie vermutlich nicht reagiert
-	        return self::_connectClusterNode($config,$type, $ndb_status, ++$try, $nextNode,$cachekey);
-	    }
-	    else
-	    {
-	        if(microtime() > ($starttime+self::MAXCONNECTIONTIMEOUT))
-    	    {
-    	        $ndb_status[$node]["try"]++;
-    	        $ndb_status[$node]["set"] = time();
-	            apc_store($cachekey, $ndb_status);
-    	    }
-	        elseif($ndb_status[$node]["try"] != 0) //nur zur�cksetzen wenn nicht eh schon alles passt
-	        {
-	            $ndb_status[$node]["try"] = 0;
-	            apc_store($cachekey, $ndb_status);
-	        }
-	    }
-	    return $db;
-	}
-	
-	protected static function _connectDefaultRandom($config,$type,$appName)
-	{
-	    $servers = $config['db'][$type];
-	    // First, try to connect the default server
-	    $db = self::_connect($config, $type, $servers['default']);
-	    if ($db == null) {
-	        // Try to connect to random server
-	        $randomServer = $servers;
-	        unset($randomServer['default']);
-	        $randomServer = array_rand($randomServer);
-	         
-	        $db = self::_connect($config, $type, $randomServer);
-	        if ($db == null) {
-	            throw new Exception('Cannot connect to both default and random servers');
-	        }
-	    }
-	    return $db;
-	}
-	
-	public static function getRegisteredDbConnectionKeys()
-	{
-		return self::$_dbConnectionKeys;
-	}
-	
-	/**
-	 * Sets default database connection.
-	 * The default connection is defined in the setting file
-	 * 
-	 * @param string $type Can be "master" or "slave"
-	 * @return Zend_Db_Adapter_Abstract
-	 */
-	public static function setDefault($type = 'slave', $appName = null)
-	{
-		$appName = $appName ? $appName : TOMATO_APP_NAME;
-		$key	 = self::DEFAULT_CONNECTION_KEY . '_' . $type . '_' . $appName;
-		
-		self::$_defaults[$appName] = $key;
-		
-		if (!Zend_Registry::isRegistered($key)) {
-			$config  = self::getDbConfig($appName);
-			$servers = $config['db'][$type];
-			
-			// First, try to connect the default server
-			$db = self::_connect($config, $type, $servers['default']);
-			if ($db == null) {
-				// Try to connect to random server
-				$randomServer = $servers;
-				unset($randomServer['default']);
-				$randomServer = array_rand($randomServer);
-				
-				$db = self::_connect($config, $type, $randomServer);
-				if ($db == null) {
-					throw new Exception('Cannot connect to both default and random servers');	
-				}
-			}
-			
-			Zend_Registry::set($key, $db);
-			self::$_dbConnectionKeys[] = $key;
-		}
-		$db = Zend_Registry::get($key);
-		Zend_Registry::set('db', $db);
-		
-		return $db;
-	}
-	
-	/**
-	 * @param string $type Can be "master" or "slave"
-	 * @param string $appName
-	 * @return Zend_Db_Adapter_Abstract
-	 */
-	public static function resetToDefault($appName = null)
-	{
-		$appName = $appName ? $appName : TOMATO_APP_NAME;
-		if (!isset(self::$_defaults[$appName])) {
-			throw new Exception('Not found the default connection registered by the ' . $appName);
-		}
-		
-		$key = self::$_defaults[$appName];
-		$db  = Zend_Registry::get($key);
-		Zend_Registry::set('db', $db);
-		return $db;
-	}
-	
-	/**
-	 * Connects to the database server
-	 * 
-	 * @param array $config Database settings
-	 * @param string $type Can be "master" or "slave"
-	 * @param string $serverName Name of the server which will be used to define the connection params
-	 * @return \Zend\Db\Adapter\Adapter
-	 */
-	protected static function _connect($config, $type, $serverName)
-	{
-		if (!isset($config->$type->$serverName)) {
-			return null;
-		}
-		$params = $config->$type->$serverName;
-		
-		// Set the adapter namespace, so Zend_Db can find the full class of adapter
-		$params['driver'] = $config->get('driver',Config::getInstance()->db->driver);
-        $params['adapterNamespace'] = $config->get('adapterNamespace','Zend\\Db\\Adapter');
-
-        // Add a prefix parameter
-		$params['prefix'] = $config->get('prefix',Config::getInstance()->db->prefix);
-
-        /*
-		if (Zend_Registry::isRegistered('activateDbProfiling') && Zend_Registry::get('activateDbProfiling') === true) {
-			$params['profiler'] = true;
-		}*/
-		
-		try {
-			$db = new \Zend\Db\Adapter\Adapter($params);
-			//$db->setFetchMode(\Zend\Db::FETCH_OBJ);
-			//$db->getConnection();
-			return $db;
-		} catch (Exception $ex) {
-            Config::doLog(__METHOD__.': Exception '.$ex->getMessage(),\Zend\Log\Logger::ERR);
-			return null;
-		}
-	}
-	
 	/**
 	 * Gets database settings
 	 * 
@@ -354,40 +114,59 @@ class Db
 	 */
 	public static function getDbConfig($config = NULL)
 	{
-		//$key	 = self::CONFIG_KEY . '_' . $config;
-		//if (!\Zend\Registry::isRegistered($key)) {
+        $configfile = self::getConfigfile($config);
 
-            $configfile = self::getConfigfile($config);
-
-            if(!$configfile){
-                Config::doLog(__METHOD__.': Configfile for '.$config.' could not be found', \Zend\Log\Logger::ERR);
-                throw new Exception('Configfile for '.$config.' could not be found');
-            }
-            echo 'use '.$configfile;
-
-			$config = include $configfile;
-			if (!is_array($config)) {
-				throw new Exception('The configuration file ' . $configfile . ' does not return array');
-			}
-            return new \Zend\Config\Config($config);
-			//\Zend\Registry::set($key, $config);
-		//}
-		
-		//return \Zend\Registry::get($key);
+        if(!$configfile){
+            Config::doLog(__METHOD__.': Configfile for '.$config.' could not be found', \Zend\Log\Logger::ERR);
+            throw new \Exception('Configfile for '.$config.' could not be found');
+        }
+        $config = include $configfile;
+        if (!is_array($config)) {
+            Config::doLog(__METHOD__.': The configuration file ' . $configfile . ' does not return array', \Zend\Log\Logger::ERR);
+            throw new \Exception('The configuration file ' . $configfile . ' does not return array');
+        }
+        return new \Zend\Config\Config($config);
 	}
-	
-	/**
-	 * Writes database settings to file
-	 * 
-	 * @param array $config
-	 * @return void
-	 */
-	public static function writeDbConfig($config)
-	{
-		$configFile = TOMATO_APP_DIR . DS . 'config' . DS . 'db.' . TOMATO_APP_NAME . '.' . strtolower(TOMATO_ENV) . '.php';
-		
-		$writer = new Tomato_Config_Writer_Php();
-		$config = is_array($config) ? new Zend_Config($config) : $config;
-		$writer->write($configFile, $config);
-	}
+
+    /**
+     * Holds the Active DB Connection
+     * @var null|\Zend\Db\Adapter\Adapter
+     */
+    protected $connection = null;
+    /**
+     * name of the Active connection
+     * @var null|string
+     */
+    protected $config = null;
+    /**
+     * Type of the Connection
+     * @var string
+     */
+    protected $type = self::CONNECTION_TYPE_SLAVE;
+    public function __construct($type = self::CONNECTION_TYPE_SLAVE, $config = null, $act = self::RETURN_AND_SET)
+    {
+        $this->config = $config;
+        $this->type = $type;
+        $this->connection = self::factory($type,$config,$act);
+    }
+
+    /**
+     * returns Sql Class from active connection
+     * @return \Zend\Db\Sql\Sql
+     */
+    public function getSql()
+    {
+        $sql = new \Zend\Db\Sql\Sql($this->connection);
+        return $sql;
+    }
+    /**
+     * @param \Zend\Db\Sql\AbstractSql $sql
+     * @param string $modeOrOptions
+     * @return mixed
+     */
+    public function query(\Zend\Db\Sql\AbstractSql $sql,$modeOrOptions = \Zend\Db\Adapter\Adapter::QUERY_MODE_EXECUTE)
+    {
+        $string = $this->getSql()->getSqlStringForSqlObject($sql);
+        return $this->connection->query($string,$modeOrOptions);
+    }
 }
