@@ -12,5 +12,5 @@ define('LIBRARY_PATH',APPLICATION_PATH.'library'.DIRECTORY_SEPARATOR);
 
 //Init Autoloader
 require_once(LIBRARY_PATH.'autoload.inc.php');
-require_once LIBRARY_PATH.'Wusa/Config.php';
+
 $config = Wusa\Config::getInstance();
