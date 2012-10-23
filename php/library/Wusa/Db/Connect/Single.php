@@ -11,10 +11,6 @@ class Single implements InterfaceConnect
         $params = array();
 
         $globalconf = \Wusa\Config::getInstance()->db;
-        echo "config\n";
-        var_dump($config);
-        echo "globalconfig\n";
-        var_dump($globalconf);
 
         $params['driverNamespace'] = $config->get('driverNamespace',$globalconf->get('driverNamespace','\\Zend\\Db\\Adapter\\Driver'));
         $params['driver'] = $config->get('driver',$globalconf->get('driver','Mysqli'));
